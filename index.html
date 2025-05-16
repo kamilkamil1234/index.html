@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>RamenBot na iPhone</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen,
+        Ubuntu, Cantarell, "Open Sans", "Helvetica Neue", sans-serif;
+      background: #fff8f0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 2rem;
+      height: 100vh;
+      margin: 0;
+      color: #b3411f;
+    }
+    h1 {
+      margin-bottom: 1rem;
+    }
+    #chat {
+      border: 1px solid #d17a4d;
+      border-radius: 10px;
+      width: 100%;
+      max-width: 400px;
+      height: 60vh;
+      overflow-y: auto;
+      padding: 1rem;
+      background: #fff3e6;
+      box-sizing: border-box;
+      margin-bottom: 1rem;
+    }
+    .message {
+      margin: 0.5rem 0;
+      padding: 0.5rem 0.75rem;
+      border-radius: 10px;
+      max-width: 80%;
+      word-wrap: break-word;
+      font-size: 1.1rem;
+    }
+    .bot {
+      background: #f2c9a3;
+      align-self: flex-start;
+      color: #5a2a00;
+    }
+    .user {
+      background: #b3411f;
+      color: white;
+      align-self: flex-end;
+    }
+    #controls {
+      width: 100%;
+      max-width: 400px;
+      display: flex;
+      justify-content: space-between;
+      gap: 1rem;
+    }
+    button {
+      flex: 1;
+      padding: 1rem;
+      font-size: 1.2rem;
+      border: none;
+      border-radius: 12px;
+      background-color: #b3411f;
+      color: white;
+      cursor: pointer;
+      transition: background-color 0.3s;
+      user-select: none;
+    }
+    button:active {
+      background-color: #80220c;
+    }
+  </style>
+</head>
+<body>
+  <h1>RamenBot 🍜</h1>
+  <div id="chat"></div>
+  <div id="controls">
+    <button id="start-btn">🎤 Mów do mnie</button>
+    <button id="reset-btn">🔄 Resetuj rozmowę</button>
+  </div>
+
+  <script>
+    const chat = document.getElementById('chat');
+    const startBtn = document.getElementById('start-btn');
+    const resetBtn = document.getElementById('reset-btn');
+
+    // Stan rozmowy
+    let stage = 0;
+    let userPrefs = {
+      spicy: null,
+      meat: null,
+      heavy: null
+    };
+
+    function addMessage(text, sender) {
+      const msg = document.createElement('div');
+      msg.classList.add('message', sender);
+      msg.textContent = text;
+      chat.appendChild(msg);
+      chat.scrollTop = chat.scrollHeight;
+    }
+
+    function botSpeak(text) {
+      addMessage(text, 'bot');
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = 'pl-PL';
+      utterance.rate = 1;
+      speechSynthesis.speak(utterance);
+    }
+
+    function botAsk() {
+      if (stage === 0) {
+        botSpeak('Cześć! Wolisz ramen pikantny czy łagodny?');
+      } else if (stage === 1) {
+        botSpeak('Jakie mięso preferujesz? Wieprzowina, kurczak, czy wege?');
+      } else if (stage === 2) {
+        botSpeak('Wolisz ramen sycący czy lekki?');
+      } else {
+        // Rekomendacja
+        let rec = 'Polecam klasyczny Shoyu Ramen!';
+        if (userPrefs.spicy && userPrefs.meat.includes('wieprz') && userPrefs.heavy) {
+          rec = 'Polecam Tonkotsu Spicy Ramen!';
+        } else if (!userPrefs.spicy && userPrefs.meat.includes('kurczak') && !userPrefs.heavy) {
+          rec = 'Polecam Chicken Light Ramen!';
+        }
+        botSpeak(rec + ' Smacznego!');
+      }
+    }
+
+    function processUserInput(text) {
+      addMessage(text, 'user');
+
+      text = text.toLowerCase();
+
+      if (stage === 0) {
+        userPrefs.spicy = text.includes('pikant') || text.includes('ostry');
+      } else if (stage === 1) {
+        if (text.includes('wieprz')) userPrefs.meat = 'wieprzowina';
+        else if (text.includes('kurczak')) userPrefs.meat = 'kurczak';
+        else userPrefs.meat = 'wege';
+      } else if (stage === 2) {
+        userPrefs.heavy = text.includes('syc') || text.includes('cięż') || text.includes('mocn');
+      }
+      stage++;
+      botAsk();
+    }
+
+    // Inicjuj chat
+    botAsk();
+
+    // Obsługa mowy
+    let recognition;
+    if ('webkitSpeechRecognition' in window) {
+      recognition = new webkitSpeechRecognition();
+    } else if ('SpeechRecognition' in window) {
+      recognition = new SpeechRecognition();
+    } else {
+      alert('Twoja przeglądarka nie wspiera rozpoznawania mowy.');
+    }
+
+    if (recognition) {
+      recognition.lang = 'pl-PL';
+      recognition.interimResults = false;
+      recognition.maxAlternatives = 1;
+
+      recognition.onresult = (event) => {
+        const transcript = event.results[0][0].transcript;
+        processUserInput(transcript);
+      };
+
+      recognition.onerror = (event) => {
+        addMessage('Nie rozumiem, spróbuj jeszcze raz.', 'bot');
+      };
+
+      recognition.onend = () => {
+        startBtn.disabled = false;
+        startBtn.textContent = '🎤 Mów do mnie';
+      };
+    }
+
+    startBtn.onclick = () => {
+      if (recognition) {
+        startBtn.disabled = true;
+        startBtn.textContent = 'Słucham... 🎧';
+        recognition.start();
+      }
+    };
+
+    resetBtn.onclick = () => {
+      stage = 0;
+      userPrefs = { spicy: null, meat: null, heavy: null };
+      chat.innerHTML = '';
+      botAsk();
+    };
+  </script>
+</body>
+</html>
